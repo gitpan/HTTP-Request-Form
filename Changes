@@ -13,3 +13,8 @@ Revision history for Perl extension HTTP::Request::Form.
 	- methods can be uppercase or lowercase (this was a problem with the
 	  new LWP)
 	- archivename now in standard format
+
+0.4  Mon Sep 28 11:10:44 CEST 1998
+	- better example in the Synopsis (this one actually works!)
+	- bugfixes in the handling of GET (this didn't work before)
+

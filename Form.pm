@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use URI::URL;
 use HTTP::Request::Common;
 
-$VERSION = "0.3";
+$VERSION = "0.4";
 
 sub new {
    my ($class, $form, $base, $debug) = @_;
@@ -23,6 +23,7 @@ sub new {
          my $tag = $self->tag;
          if ($tag eq 'input') {
             my $type = $self->attr('type');
+	    $type = "text" if (!defined($type));
             if ($type eq 'hidden') {
                my $name = $self->attr('name');
                my $value = $self->attr('value');
@@ -181,7 +182,8 @@ sub press {
    if (uc($self->method) eq "POST") {
       return POST $url, \@array;
    } elsif (uc($self->method) eq "GET") {
-      return GET $url, \@array;
+      $url->query_form(@array);
+      return GET $url;
    }
 }
 
@@ -218,21 +220,25 @@ HTTP::Request::Form - Construct HTTP::Request objects for form processing
 
 =head1 SYNOPSIS
 
-  use HTTP::Request::Form;
+use the following as a tool to query Altavista for "perl" from the commandline:
+
   use HTML::TreeBuilder;
   use URI::URL;
+  use LWP::UserAgent;
+  use HTTP::Request;
+  use HTTP::Request::Common;
+  use HTTP::Request::Form;
 
-  $ua = LWP::UserAgent->new;
-  $url = url 'http://www.sn.no/';
-  $res = $ua->request(GET $url);
-  $p = HTML::TreeBuilder->new;
-  foreach $i (@{$p->extract_links(qw(form))}) {
-     $f = HTTP::Request::Form->new($i, $url);
-     $f->field("user", "hugo");
-     $f->field("password", "duddi");
-     $ua->request($f->press("Send"));
-  }
-  $p->delete();
+  my $ua = LWP::UserAgent->new;
+  my $url = url 'http://www.altavista.digital.com/';
+  my $res = $ua->request(GET $url);
+  my $tb = HTML::TreeBuilder->new;
+  $tb->parse($res->content);
+  my @forms = @{$tb->extract_links(qw(FORM))}
+  my $f = HTTP::Request::Form->new($forms[0][1], $url);
+  $f->field("q", "perl");
+  my $response = $ua->request($f->press("search"));
+  print $response->content if ($response->is_success);
 
 =head1 DESCRIPTION
 

@@ -3,21 +3,26 @@ NAME
     processing
 
 SYNOPSIS
-      use HTTP::Request::Form;
+    use the following as a tool to query Altavista for "perl" from
+    the commandline:
+
       use HTML::TreeBuilder;
       use URI::URL;
+      use LWP::UserAgent;
+      use HTTP::Request;
+      use HTTP::Request::Common;
+      use HTTP::Request::Form;
 
-      $ua = LWP::UserAgent->new;
-      $url = url 'http://www.sn.no/';
-      $res = $ua->request(GET $url);
-      $p = HTML::TreeBuilder->new;
-      foreach $i (@{$p->extract_links(qw(form))}) {
-         $f = HTTP::Request::Form->new($i, $url);
-         $f->field("user", "hugo");
-         $f->field("password", "duddi");
-         $ua->request($f->press("Send"));
-      }
-      $p->delete();
+      my $ua = LWP::UserAgent->new;
+      my $url = url 'http://www.altavista.digital.com/';
+      my $res = $ua->request(GET $url);
+      my $tb = HTML::TreeBuilder->new;
+      $tb->parse($res->content);
+      my @forms = @{$tb->extract_links(qw(FORM))}
+      my $f = HTTP::Request::Form->new($forms[0][1], $url);
+      $f->field("q", "perl");
+      my $response = $ua->request($f->press("search"));
+      print $response->content if ($response->is_success);
 
 DESCRIPTION
     This is an extension of the HTTP::Request suite. It allows easy
