@@ -5,15 +5,17 @@ use vars qw($VERSION);
 use URI::URL;
 use HTTP::Request::Common;
 
-$VERSION = "0.4";
+$VERSION = "0.5";
 
 sub new {
    my ($class, $form, $base, $debug) = @_;
    my @allfields;
    my @fields;
    my %fieldvals;
+   my %fieldtypes;
    my @buttons;
    my %buttonvals;
+   my %buttontypes;
    my %selections;
 
    $form->traverse(
@@ -21,7 +23,8 @@ sub new {
       my ($self, $start, $depth) = @_;
       if (ref $self) {
          my $tag = $self->tag;
-         if ($tag eq 'input') {
+         if (($tag eq 'input') || 
+	     (($tag eq 'button') && $start)) {
             my $type = $self->attr('type');
 	    $type = "text" if (!defined($type));
             if ($type eq 'hidden') {
@@ -29,24 +32,53 @@ sub new {
                my $value = $self->attr('value');
                push @allfields, $name;
                $fieldvals{$name} = $value;
-            } elsif ($type eq 'submit') {
+	       $fieldtypes{$name} = "$tag/$type";
+            } elsif (($type eq 'submit') || 
+	              ($type eq 'reset') || 
+		      ($type eq 'image')) {
                my $name = $self->attr('name');
                my $value = $self->attr('value');
                if (defined($name)) {
                   if (!defined($buttonvals{$name})) {
                       push @buttons, $name;
                       $buttonvals{$name} = [$value];
+		      $buttontypes{$name} = [$type];
                   } else {
                       push @{$buttonvals{$name}}, $value;
+		      push @{$buttontypes{$name}}, $type;
                   }
                }
             } else {
                my $name = $self->attr('name');
                my $value = $self->attr('value');
-               push @allfields, $name;
-               push @fields, $name;
-               $fieldvals{$name} = $value;
+	       if ($type eq 'radio') {
+	          if (!defined($fieldtypes{$name})) {
+		     push @allfields, $name;
+		     push @fields, $name;
+	             $fieldtypes{$name} = "$tag/$type";
+		  }
+                  if (!defined($selections{$name})) {
+                     $selections{$name} = [$value];
+                  } else {
+                     push @{$selections{$name}}, $value;
+                  }
+                  $fieldvals{$name} = $value if ($self->attr('checked'));
+	       } else {
+                  push @allfields, $name;
+                  push @fields, $name;
+                  $fieldvals{$name} = $value;
+	          $fieldtypes{$name} = "$tag/$type";
+	       }
             }
+	 } elsif (($tag eq 'textarea') && $start) {
+	    my $name = $self->attr('name');
+	    push @allfields, $name;
+	    push @fields, $name;
+	    $fieldvals{$name} = "";
+	    foreach my $o (@{$self->content}) {
+	       $fieldvals{$name} .= $o->as_HTML;
+	    }
+	    $fieldtypes{$name} = "$tag";
          } elsif (($tag eq 'select') && $start) {
             my $name = $self->attr('name');
             push @allfields, $name;
@@ -66,6 +98,7 @@ sub new {
                   }
                }
             }
+	    $fieldtypes{$name} = "$tag";
          }
       }
       1;
@@ -74,14 +107,20 @@ sub new {
 
    my $self = {};
    $self->{'debug'} = $debug;
-   $self->{'method'} = $form->attr('method');
+   if (defined($form->attr('method'))) {
+      $self->{'method'} = $form->attr('method');
+   } else {
+      $self->{'method'} = 'GET';
+   }
    $self->{'link'} = $form->attr('action');
    $self->{'base'} = $base;
    $self->{'allfields'} = \@allfields;
    $self->{'fields'} = \@fields;
    $self->{'fieldvals'} = \%fieldvals;
+   $self->{'fieldtypes'} = \%fieldtypes;
    $self->{'buttons'} = \@buttons;
    $self->{'buttonvals'} = \%buttonvals;
+   $self->{'buttontypes'} = \%buttontypes;
    $self->{'selections'} = \%selections;
    bless $self, $class;
 }
@@ -125,6 +164,11 @@ sub field_selection {
    return $self->{'selections'}->{$name};
 }
 
+sub field_type {
+   my ($self, $name) = @_;
+   return $self->{'fieldtypes'}->{$name};
+}
+
 sub is_selection {
    my ($self, $name) = @_;
    if (defined($self->field_selection($name))) {
@@ -148,6 +192,11 @@ sub button {
    }
 }
 
+sub button_type {
+   my ($self, $button) = @_;
+   return $self->{'buttontypes'}->{$button};
+}
+
 sub button_exists {
    my ($self, $button) = @_;
    if (defined($self->button($button))) {
@@ -161,8 +210,20 @@ sub press {
    my ($self, $button, $bnum) = @_;
    my @array = ();
    foreach my $i ($self->allfields) {
-      push @array, $i;
-      push @array, $self->field($i);
+      if ($self->field_type($i) eq "input/checkbox") {
+         if (defined($self->field($i))) {
+            push @array, $i;
+            push @array, $self->field($i);
+	 }
+      } elsif ($self->field_type($i) eq "select") {
+         if (defined($self->field($i))) {
+	    push @array, $i;
+	    push @array, $self->field($i);
+	 }
+      } else {
+         push @array, $i;
+         push @array, $self->field($i);
+      }
    }
    if (defined($button)) {
       push @array, $button;
@@ -177,7 +238,7 @@ sub press {
       $url = $url->abs($self->base);
    }
    if ($self->{'debug'}) {
-      print $self->method, " ", $self->link, " ", join(' - ', @array), "\n";
+      print $self->method, " $url ", join(' - ', @array), "\n";
    }
    if (uc($self->method) eq "POST") {
       return POST $url, \@array;
@@ -192,9 +253,9 @@ sub dump {
    print "FORM METHOD=", $self->method, "\n     ACTION=", $self->link, "\n     BASE=", $self->base, "\n";
    foreach my $i ($self->allfields) {
       if (defined($self->field($i))) {
-         print "FIELD $i=", $self->field($i), "\n";
+         print "FIELD{", $self->field_type($i), "} $i=", $self->field($i), "\n";
       } else {
-         print "FIELD $i\n";
+         print "FIELD{", $self->field_type($i), "} $i\n";
       }
       if ($self->is_selection($i)) {
          print "      [", join(", ", @{$self->field_selection($i)}), "]\n";
@@ -202,9 +263,12 @@ sub dump {
    }
    foreach my $i ($self->buttons) {
       if (defined($self->button($i))) {
-         print "BUTTON $i=[", join(", ", @{$self->button($i)}), "]\n";
+         print "BUTTON $i=[", join(", ", map {$_ ? $_ : "<undef>"} @{$self->button($i)}), "]\n";
       } else {
          print "BUTTON $i\n";
+      }
+      if (defined($self->button_type($i))) {
+         print "       $i={", join(", ", @{$self->button_type($i)}), "}\n";
       }
    }
    print "\n";
@@ -234,7 +298,7 @@ use the following as a tool to query Altavista for "perl" from the commandline:
   my $res = $ua->request(GET $url);
   my $tb = HTML::TreeBuilder->new;
   $tb->parse($res->content);
-  my @forms = @{$tb->extract_links(qw(FORM))}
+  my @forms = @{$tb->extract_links(qw(FORM))};
   my $f = HTTP::Request::Form->new($forms[0][1], $url);
   $f->field("q", "perl");
   my $response = $ua->request($f->press("search"));
@@ -302,14 +366,25 @@ This method retrieves or sets a field-value. The field is identified by
 it's name. You have to be sure that you only put a allowed value into the
 field.
 
+=item field_type($name)
+
+This method gives you the type of the named field, so that you can
+distinguish on this type. (this is the only way to distinguish
+selections and radio buttons).
+
 =item is_selection($name)
 
-This tests if a field is a selection or an input.
+This tests if a field is a selection or an input. Radio-Buttons are
+used in the same way as standard selection fields, so is_selection
+returns a true value for radio buttons, too! (Of course, only one
+value is submitted for a radio button)
 
 =item field_selection($name)
 
 This delivers the array of the options of a selection. The element that is
-marked with selected in the source is given as the default value.
+marked with selected in the source is given as the default value. This
+works in the same way for radio buttons, as they are just handled
+as a special case of selections!
 
 =item buttons()
 
@@ -320,6 +395,12 @@ This delivers a list of all defined and named buttons of a form.
 This gets or sets the value of a button. Normally only getting a button value
 is needed. The value of a button is a reference to an array of values (because
 a button can exist multiple times).
+
+=item button_type($button)
+
+This gives you the type of a button (submit/reset/image). The result
+is an array of type names, as a button with one name can exist
+multiple times.
 
 =item button_exists($button)
 
@@ -362,24 +443,45 @@ L<HTML::Element>, L<URI::URL>
 
 HTTP::Request::Form version 0.2, July 15th, 1998
 
-=head1 BUGS
+=head1 RESTRICTIONS
 
 Only a subset of all possible form elements are currently supported. The list
 of supported tags as of this version includes:
 
-  INPUT
+  INPUT/CHECKBOX
   INPUT/HIDDEN
+  INPUT/IMAGE
+  INPUT/RADIO
+  INPUT/RESET
   INPUT/SUBMIT
-  SELECT
+  INPUT/* (are all handled as simple text entry)
   OPTION
+  SELECT
+  TEXTAREA
 
-There currently is no special code to help with radio buttons or checkboxes.
-Although these can easily be used with the standard INPUT handler, it would
-be better to give a simpler interface to them.
+=head1 BUGS
+
+There is currently no support for multiple selections (you can do
+them yourself by setting a selection to a comma-delimited list of
+values).
+
+If there are several fields with the same name, you can only set
+the value of the first of this fields (this is especially problematic
+with checkboxes). This does work with buttons that have the same
+name, though (you can press each instance identified by number).
+
+Error-Checking is currently very limited (not to say nonexistant).
+
+Support for HTML 4.0 optgroup tags is missing (as is with allmost
+all current browsers, so that is not a great loss).
+
+The button tag (HTML 4.0) is just handled as an alias for the input
+tag - this is of course incorrect, but sufficient for support of
+the usual button types.
 
 =head1 COPYRIGHT
 
-Copyright 1998, Georg Bauer <Georg_Bauer@muensterland.org>
+Copyright 1998, 1999, Georg Bauer <Georg_Bauer@muensterland.org>
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

@@ -3,3 +3,4 @@ Form.pm
 MANIFEST
 Makefile.PL
 README
+ex/altavista.pl

@@ -12,7 +12,7 @@ WriteMakefile(
 	'HTML::TreeBuilder' => 0,
     },
     dist	=> { 
-        PREOP => 'co -l README && pod2text Form.pm >README && ci -u README',
+        PREOP => 'pod2text Form.pm >README',
         COMPRESS => 'gzip -9f', 
 	SUFFIX => 'gz', 
     },

@@ -18,7 +18,7 @@ SYNOPSIS
       my $res = $ua->request(GET $url);
       my $tb = HTML::TreeBuilder->new;
       $tb->parse($res->content);
-      my @forms = @{$tb->extract_links(qw(FORM))}
+      my @forms = @{$tb->extract_links(qw(FORM))};
       my $f = HTTP::Request::Form->new($forms[0][1], $url);
       $f->field("q", "perl");
       my $response = $ua->request($f->press("search"));
@@ -77,13 +77,24 @@ INSTANCE METHODS
         identified by it's name. You have to be sure that you only
         put a allowed value into the field.
 
+    field_type($name)
+        This method gives you the type of the named field, so that
+        you can distinguish on this type. (this is the only way to
+        distinguish selections and radio buttons).
+
     is_selection($name)
-        This tests if a field is a selection or an input.
+        This tests if a field is a selection or an input. Radio-
+        Buttons are used in the same way as standard selection
+        fields, so is_selection returns a true value for radio
+        buttons, too! (Of course, only one value is submitted for a
+        radio button)
 
     field_selection($name)
         This delivers the array of the options of a selection. The
         element that is marked with selected in the source is given
-        as the default value.
+        as the default value. This works in the same way for radio
+        buttons, as they are just handled as a special case of
+        selections!
 
     buttons()
         This delivers a list of all defined and named buttons of a
@@ -94,6 +105,11 @@ INSTANCE METHODS
         getting a button value is needed. The value of a button is a
         reference to an array of values (because a button can exist
         multiple times).
+
+    button_type($button)
+        This gives you the type of a button (submit/reset/image).
+        The result is an array of type names, as a button with one
+        name can exist multiple times.
 
     button_exists($button)
         This gives true if the named button exists, false (undef)
@@ -132,24 +148,45 @@ REQUIRES
 VERSION
     HTTP::Request::Form version 0.2, July 15th, 1998
 
-BUGS
+RESTRICTIONS
     Only a subset of all possible form elements are currently
     supported. The list of supported tags as of this version
     includes:
 
-      INPUT
+      INPUT/CHECKBOX
       INPUT/HIDDEN
+      INPUT/IMAGE
+      INPUT/RADIO
+      INPUT/RESET
       INPUT/SUBMIT
-      SELECT
+      INPUT/* (are all handled as simple text entry)
       OPTION
+      SELECT
+      TEXTAREA
 
-    There currently is no special code to help with radio buttons or
-    checkboxes. Although these can easily be used with the standard
-    INPUT handler, it would be better to give a simpler interface to
-    them.
+BUGS
+    There is currently no support for multiple selections (you can
+    do them yourself by setting a selection to a comma-delimited
+    list of values).
+
+    If there are several fields with the same name, you can only set
+    the value of the first of this fields (this is especially
+    problematic with checkboxes). This does work with buttons that
+    have the same name, though (you can press each instance
+    identified by number).
+
+    Error-Checking is currently very limited (not to say
+    nonexistant).
+
+    Support for HTML 4.0 optgroup tags is missing (as is with
+    allmost all current browsers, so that is not a great loss).
+
+    The button tag (HTML 4.0) is just handled as an alias for the
+    input tag - this is of course incorrect, but sufficient for
+    support of the usual button types.
 
 COPYRIGHT
-    Copyright 1998, Georg Bauer <Georg_Bauer@muensterland.org>
+    Copyright 1998, 1999, Georg Bauer <Georg_Bauer@muensterland.org>
 
     This library is free software; you can redistribute it and/or
     modify it under the same terms as Perl itself.

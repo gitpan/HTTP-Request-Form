@@ -18,3 +18,19 @@ Revision history for Perl extension HTTP::Request::Form.
 	- better example in the Synopsis (this one actually works!)
 	- bugfixes in the handling of GET (this didn't work before)
 
+0.5  Thu Aug 19 14:02:13 MET DST 1999
+	Several user-reported bug-fixes and some extensions:
+	- fixed synopsis (missing ";")
+	- handle reset buttons identically to submit buttons
+	- debug now shows the expanded URL and not the given link
+	- support for textarea fields
+	- special support for radio buttons (they are now handled in the
+	  same way as selections and only one value is submitted to the
+	  server on press(...))
+	- special support for checkboxes (only checkboxes with defined
+	  value are submitted to the server, undefined ones are left
+	  out)
+	- support for image buttons
+	- support for HTML 4.0 button tags (they are handled identically
+	  to their input equivalents)
+	- when the form-tag doesn't have a method attribute, GET is assumed
