@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use URI::URL;
 use HTTP::Request::Common;
 
-$VERSION = "0.951";
+$VERSION = "0.952";
 
 sub new {
    my ($class, $form, $base, $debug) = @_;
@@ -100,8 +100,10 @@ sub new {
 	    push @allfields, $name;
 	    push @fields, $name;
 	    $fieldvals{$name} = "";
-	    foreach my $o (@{$self->content}) {
-	       $fieldvals{$name} .= ref($o) ? $o->as_HTML : $o;
+	    if ($self->content) {
+	       foreach my $o (@{$self->content}) {
+	          $fieldvals{$name} .= ref($o) ? $o->as_HTML : $o;
+	       }
 	    }
 	    $fieldtypes{$name} = $tag;
          } elsif (($tag eq 'select') && $start) {
