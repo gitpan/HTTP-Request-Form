@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use URI::URL;
 use HTTP::Request::Common;
 
-$VERSION = "0.95";
+$VERSION = "0.951";
 
 sub new {
    my ($class, $form, $base, $debug) = @_;
@@ -307,9 +307,9 @@ sub new_many {
                $$fieldvals{$name} = "";
                foreach my $o (@{$self->content}) {
                   if ($o->can('as_HTML')) {
-                     $fieldvals{$name} .= $o->as_HTML;
+                     $$fieldvals{$name} .= $o->as_HTML;
                   } else {
-                     $fieldvals{$name} .= $o;
+                     $$fieldvals{$name} .= $o;
                   }
                }
                $$fieldtypes{$name} = $tag;

@@ -76,3 +76,8 @@ Revision history for Perl extension HTTP::Request::Form.
 	- iteration over self->content || [], not self->content alone
 	  (that one could be undef)
 
+0.951 Thu Sep 13 10:19:00 CET 2001
+	One small bugfix by Michael Kablitz
+	- textarea-handling was broken and needed double $ because of
+	  references. Damn typos. Funny thing: nobody else mentioned it.
+	  Half a year with a broken package :-)
