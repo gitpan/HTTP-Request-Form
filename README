@@ -115,6 +115,10 @@ INSTANCE METHODS
         This gives true if the named button exists, false (undef)
         otherwise.
 
+    referer([$value])
+        This returns or sets the referer header for an request. This
+        is usefull if a CGI needs a set referer for authentication.
+
     press([$name [, $number]])
         This method creates a HTTP::Request object (via
         HTTP::Request::Common) that sends the formdata to the server
@@ -146,7 +150,7 @@ REQUIRES
       LWP::UserAgent
 
 VERSION
-    HTTP::Request::Form version 0.2, July 15th, 1998
+    HTTP::Request::Form version 0.6, March 2nd, 2000
 
 RESTRICTIONS
     Only a subset of all possible form elements are currently
@@ -159,6 +163,7 @@ RESTRICTIONS
       INPUT/RADIO
       INPUT/RESET
       INPUT/SUBMIT
+      INPUT/FILE
       INPUT/* (are all handled as simple text entry)
       OPTION
       SELECT

@@ -34,3 +34,10 @@ Revision history for Perl extension HTTP::Request::Form.
 	- support for HTML 4.0 button tags (they are handled identically
 	  to their input equivalents)
 	- when the form-tag doesn't have a method attribute, GET is assumed
+
+0.6  Thu Mar  2 19:23:54 CET 2000
+	Some extensions that I needed myself:
+	- added support for input field type "file"
+	- added a fix to change all field-types to lowercase
+	- added support for the referer header
+

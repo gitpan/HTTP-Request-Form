@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use URI::URL;
 use HTTP::Request::Common;
 
-$VERSION = "0.5";
+$VERSION = "0.6";
 
 sub new {
    my ($class, $form, $base, $debug) = @_;
@@ -17,6 +17,7 @@ sub new {
    my %buttonvals;
    my %buttontypes;
    my %selections;
+   my $upload = 0;
 
    $form->traverse(
       sub {
@@ -25,7 +26,7 @@ sub new {
          my $tag = $self->tag;
          if (($tag eq 'input') || 
 	     (($tag eq 'button') && $start)) {
-            my $type = $self->attr('type');
+            my $type = lc($self->attr('type'));
 	    $type = "text" if (!defined($type));
             if ($type eq 'hidden') {
                my $name = $self->attr('name');
@@ -36,8 +37,8 @@ sub new {
             } elsif (($type eq 'submit') || 
 	              ($type eq 'reset') || 
 		      ($type eq 'image')) {
-               my $name = $self->attr('name');
-               my $value = $self->attr('value');
+               my $name = $self->attr('name') || $type;
+               my $value = $self->attr('value') || $type;
                if (defined($name)) {
                   if (!defined($buttonvals{$name})) {
                       push @buttons, $name;
@@ -68,6 +69,9 @@ sub new {
                   push @fields, $name;
                   $fieldvals{$name} = $value;
 	          $fieldtypes{$name} = "$tag/$type";
+	       }
+	       if ($type eq 'file') {
+	          $upload = 1;
 	       }
             }
 	 } elsif (($tag eq 'textarea') && $start) {
@@ -122,6 +126,7 @@ sub new {
    $self->{'buttonvals'} = \%buttonvals;
    $self->{'buttontypes'} = \%buttontypes;
    $self->{'selections'} = \%selections;
+   $self->{'upload'} = $upload;
    bless $self, $class;
 }
 
@@ -206,6 +211,15 @@ sub button_exists {
    }
 }
 
+sub referer {
+   my ($self, $value) = @_;
+   if (defined($value)) {
+      $self->{'referer'} = $value;
+   } else {
+      return $self->{'referer'};
+   }
+}
+
 sub press {
    my ($self, $button, $bnum) = @_;
    my @array = ();
@@ -220,6 +234,9 @@ sub press {
 	    push @array, $i;
 	    push @array, $self->field($i);
 	 }
+      } elsif ($self->field_type($i) eq "input/file") {
+         push @array, $i;
+	 push @array, [ $self->field($i) ];
       } else {
          push @array, $i;
          push @array, $self->field($i);
@@ -241,7 +258,24 @@ sub press {
       print $self->method, " $url ", join(' - ', @array), "\n";
    }
    if (uc($self->method) eq "POST") {
-      return POST $url, \@array;
+      my $referer = $self->referer;
+      if ($self->{'upload'}) {
+         if (defined($referer)) {
+            return POST $url, Content_Type => 'form-data',
+	                      'referer' => $referer,
+	                      Content => \@array;
+	 } else {
+            return POST $url, Content_Type => 'form-data',
+	                      Content => \@array;
+	 }
+      } else {
+         if (defined($referer)) {
+            return POST $url, 'referer' => $referer,
+	                      Content => \@array;
+	 } else {
+            return POST $url, \@array;
+	 }
+      }
    } elsif (uc($self->method) eq "GET") {
       $url->query_form(@array);
       return GET $url;
@@ -406,6 +440,11 @@ multiple times.
 
 This gives true if the named button exists, false (undef) otherwise.
 
+=item referer([$value])
+
+This returns or sets the referer header for an request. This is usefull if
+a CGI needs a set referer for authentication.
+
 =item press([$name [, $number]])
 
 This method creates a HTTP::Request object (via HTTP::Request::Common) that
@@ -441,7 +480,7 @@ L<HTML::Element>, L<URI::URL>
 
 =head1 VERSION
 
-HTTP::Request::Form version 0.2, July 15th, 1998
+HTTP::Request::Form version 0.6, March 2nd, 2000
 
 =head1 RESTRICTIONS
 
@@ -454,6 +493,7 @@ of supported tags as of this version includes:
   INPUT/RADIO
   INPUT/RESET
   INPUT/SUBMIT
+  INPUT/FILE
   INPUT/* (are all handled as simple text entry)
   OPTION
   SELECT
