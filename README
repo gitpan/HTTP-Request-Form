@@ -28,11 +28,16 @@ DESCRIPTION
     This is an extension of the HTTP::Request suite. It allows easy
     processing of forms in a user agent by filling out fields,
     querying fields, selections and buttons and pressing buttons. It
-    uses HTML::TreeBuilder generated parse triees of documents
+    uses HTML::TreeBuilder generated parse trees of documents
     (especially the forms parts extracted with extract_links) and
     generates it's own internal representation of forms from which
     it then generates the request objects to process the form
     application.
+
+    If you use HTML::TreeBuilder like me, please be aware of the
+    fact that the extract_links call in the above example returns an
+    array with alternating URL and FORM-elements, so the first FORM
+    is actually at index 1 and the second FORM is at index 3!
 
 CLASS METHODS
     new($form [, $base [, $debug]])
@@ -96,6 +101,28 @@ INSTANCE METHODS
         buttons, as they are just handled as a special case of
         selections!
 
+    is_checkbox($name)
+        This tells you if a field is a checkbox. If it is, there are
+        several support methods to make use of the special features
+        of checkboxes, for example the fact that it is only sent if
+        it is checked.
+
+    checkboxes()
+        This method delivers a list of all checkbox fields much in
+        the same way as the buttons method.
+
+    checkbox_check($name)
+    =item checkbox_uncheck($name)
+    =item checkbox_toggle($name)
+        These methods set, unset or toggle the checkbox checked
+        state. Checkbox values are only added to the result if they
+        are checked.
+
+    checkbox_ischecked($name)
+        This methods tells you wether a checkbox is checked or not.
+        This is important if you want to analyze the state of fields
+        directly after the parse.
+
     buttons()
         This delivers a list of all defined and named buttons of a
         form.
@@ -119,7 +146,7 @@ INSTANCE METHODS
         This returns or sets the referer header for an request. This
         is usefull if a CGI needs a set referer for authentication.
 
-    press([$name [, $number]])
+    press([$name [, $coord ] [, $number]])
         This method creates a HTTP::Request object (via
         HTTP::Request::Common) that sends the formdata to the server
         with the requested method. If you give a button-name, that
@@ -128,6 +155,11 @@ INSTANCE METHODS
         parameter. If the number of the button is given, that button
         value is delivered. If the number is not given, 0 (the first
         button of this name) is assumed.
+
+        The "coord" parameter comes in handy if you have an image
+        button. If this is the case, the button press will simulate
+        a press at coordinates [2,2] unless you provide an anonymous
+        array with different coordinates.
 
     dump()
         This method dumps the form-data on stdio for debugging

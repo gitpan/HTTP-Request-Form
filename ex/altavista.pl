@@ -9,7 +9,7 @@ use HTTP::Request::Common;
 use HTTP::Request::Form;
 
 my $ua = LWP::UserAgent->new;
-my $url = url 'http://www.altavista.digital.com/';
+my $url = url 'http://www.altavista.com/';
 my $res = $ua->request(GET $url);
 my $tb = HTML::TreeBuilder->new;
 $tb->parse($res->content);

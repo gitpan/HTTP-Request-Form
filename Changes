@@ -41,3 +41,12 @@ Revision history for Perl extension HTTP::Request::Form.
 	- added a fix to change all field-types to lowercase
 	- added support for the referer header
 
+0.7  Thu Mar  2 21:14:03 CET 2000
+	Added some user-requested features
+	- added a sample for yahoo that uses an anonymous press
+	- changed the servername in the altavista example
+	- added a diagnostic check when pressing a button, that the
+	  button is really defined
+	- added better support for checkboxes. See the is_checkbox and
+	  the checkbox_* functions
+	- added support for (x,y)-coordinates when pressing image buttons

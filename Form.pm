@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use URI::URL;
 use HTTP::Request::Common;
 
-$VERSION = "0.6";
+$VERSION = "0.7";
 
 sub new {
    my ($class, $form, $base, $debug) = @_;
@@ -13,6 +13,7 @@ sub new {
    my @fields;
    my %fieldvals;
    my %fieldtypes;
+   my %checkboxstate;
    my @buttons;
    my %buttonvals;
    my %buttontypes;
@@ -64,6 +65,16 @@ sub new {
                      push @{$selections{$name}}, $value;
                   }
                   $fieldvals{$name} = $value if ($self->attr('checked'));
+	       } elsif ($type eq 'checkbox') {
+	          push @allfields, $name;
+		  push @fields, $name;
+		  $fieldvals{$name} = $value;
+		  $fieldtypes{$name} = "$tag/$type";
+		  if ($self->attr('checked')) {
+		     $checkboxstate{$name} = 1;
+		  } else {
+		     $checkboxstate{$name} = 0;
+		  }
 	       } else {
                   push @allfields, $name;
                   push @fields, $name;
@@ -127,6 +138,7 @@ sub new {
    $self->{'buttontypes'} = \%buttontypes;
    $self->{'selections'} = \%selections;
    $self->{'upload'} = $upload;
+   $self->{'checkboxstate'} = \%checkboxstate;
    bless $self, $class;
 }
 
@@ -183,6 +195,47 @@ sub is_selection {
    }
 }
 
+sub checkbox_check {
+   my ($self, $name) = @_;
+   return if (!defined($self->{'checkboxstate'}->{$name}));
+   $self->{'checkboxstate'}->{$name} = 1;
+}
+
+sub checkbox_uncheck {
+   my ($self, $name) = @_;
+   return if (!defined($self->{'checkboxstate'}->{$name}));
+   $self->{'checkboxstate'}->{$name} = 0;
+}
+
+sub checkbox_toggle {
+   my ($self, $name) = @_;
+   return if (!defined($self->{'checkboxstate'}->{$name}));
+   if ($self->{'checkboxstate'}->{$name}) {
+      $self->{'checkboxstate'}->{$name} = 0;
+   } else {
+      $self->{'checkboxstate'}->{$name} = 1;
+   }
+}
+
+sub checkbox_ischecked {
+   my ($self, $name) = @_;
+   return $self->{'checkboxstate'}->{$name};
+}
+
+sub is_checkbox {
+   my ($self, $name) = @_;
+   if (defined($self->{'checkboxstate'}->($name))) {
+      return 1;
+   } else {
+      return undef;
+   }
+}
+
+sub checkboxes {
+   my $self = shift;
+   return keys %{$self->{'checkboxstate'}}
+}
+
 sub buttons {
    my $self = shift;
    return @{$self->{'buttons'}};
@@ -221,11 +274,18 @@ sub referer {
 }
 
 sub press {
-   my ($self, $button, $bnum) = @_;
+   my ($self, $button, $bnum, $bnum2) = @_;
+   my $x = 2;
+   my $y = 2;
+   if (ref $bnum) {
+      $x = $bnum->[0];
+      $y = $bnum->[1];
+      $bnum = $bnum2;
+   }
    my @array = ();
    foreach my $i ($self->allfields) {
       if ($self->field_type($i) eq "input/checkbox") {
-         if (defined($self->field($i))) {
+         if ($self->checkbox_ischecked($i)) {
             push @array, $i;
             push @array, $self->field($i);
 	 }
@@ -243,11 +303,22 @@ sub press {
       }
    }
    if (defined($button)) {
-      push @array, $button;
+      die "Button $button not included in form"
+          if (!defined($self->button($button)));
       if (defined($bnum)) {
-         push @array, @{$self->button($button)}[$bnum];
+         if (@{$self->button_type($button)}[$bnum] eq "image") {
+            push @array, $button . '.x', $x;
+            push @array, $button . '.y', $y;
+	 } else {
+            push @array, $button, @{$self->button($button)}[$bnum];
+	 }
       } else {
-         push @array, @{$self->button($button)}[0];
+         if (@{$self->button_type($button)}[0] eq "image") {
+            push @array, $button . '.x', $x;
+            push @array, $button . '.y', $y;
+	 } else {
+            push @array, $button, @{$self->button($button)}[0];
+	 }
       }
    }
    my $url = url $self->link;
@@ -343,9 +414,14 @@ use the following as a tool to query Altavista for "perl" from the commandline:
 This is an extension of the HTTP::Request suite. It allows easy processing
 of forms in a user agent by filling out fields, querying fields, selections
 and buttons and pressing buttons. It uses HTML::TreeBuilder generated parse
-triees of documents (especially the forms parts extracted with extract_links)
+trees of documents (especially the forms parts extracted with extract_links)
 and generates it's own internal representation of forms from which it then
 generates the request objects to process the form application.
+
+If you use HTML::TreeBuilder like me, please be aware of the fact that the
+extract_links call in the above example returns an array with alternating
+URL and FORM-elements, so the first FORM is actually at index 1 and the
+second FORM is at index 3!
 
 =head1 CLASS METHODS
 
@@ -420,6 +496,29 @@ marked with selected in the source is given as the default value. This
 works in the same way for radio buttons, as they are just handled
 as a special case of selections!
 
+=item is_checkbox($name)
+
+This tells you if a field is a checkbox. If it is, there are several support
+methods to make use of the special features of checkboxes, for example the
+fact that it is only sent if it is checked.
+
+=item checkboxes()
+
+This method delivers a list of all checkbox fields much in the same way as
+the buttons method.
+
+=item checkbox_check($name)
+=item checkbox_uncheck($name)
+=item checkbox_toggle($name)
+
+These methods set, unset or toggle the checkbox checked state. Checkbox
+values are only added to the result if they are checked.
+
+=item checkbox_ischecked($name)
+
+This methods tells you wether a checkbox is checked or not. This is important
+if you want to analyze the state of fields directly after the parse.
+
 =item buttons()
 
 This delivers a list of all defined and named buttons of a form.
@@ -445,7 +544,7 @@ This gives true if the named button exists, false (undef) otherwise.
 This returns or sets the referer header for an request. This is usefull if
 a CGI needs a set referer for authentication.
 
-=item press([$name [, $number]])
+=item press([$name [, $coord ] [, $number]])
 
 This method creates a HTTP::Request object (via HTTP::Request::Common) that
 sends the formdata to the server with the requested method. If you give a
@@ -453,6 +552,10 @@ button-name, that button is used. If you give no button name, it assumes a
 button without a name and just leaves out this last parameter. If the number
 of the button is given, that button value is delivered. If the number is not
 given, 0 (the first button of this name) is assumed.
+
+The "coord" parameter comes in handy if you have an image button. If this
+is the case, the button press will simulate a press at coordinates [2,2]
+unless you provide an anonymous array with different coordinates.
 
 =item dump()
 
