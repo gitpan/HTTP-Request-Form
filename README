@@ -6,23 +6,26 @@ SYNOPSIS
     use the following as a tool to query Altavista for "perl" from
     the commandline:
 
-      use HTML::TreeBuilder;
       use URI::URL;
       use LWP::UserAgent;
       use HTTP::Request;
       use HTTP::Request::Common;
       use HTTP::Request::Form;
+      use HTML::TreeBuilder 3.0;
 
       my $ua = LWP::UserAgent->new;
       my $url = url 'http://www.altavista.digital.com/';
       my $res = $ua->request(GET $url);
-      my $tb = HTML::TreeBuilder->new;
-      $tb->parse($res->content);
-      my @forms = @{$tb->extract_links(qw(FORM))};
-      my $f = HTTP::Request::Form->new($forms[0][1], $url);
+      my $tree = HTML::TreeBuilder->new;
+      $tree->parse($res->content);
+      $tree->eof();
+
+      my @forms = $tree->find_by_tag_name('FORM');
+      die "What, no forms in $url?" unless @forms;
+      my $f = HTTP::Request::Form->new($forms[0], $url);
       $f->field("q", "perl");
       my $response = $ua->request($f->press("search"));
-      print $response->content if ($response->is_success);
+      print $response->content if $response->is_success;
 
 DESCRIPTION
     This is an extension of the HTTP::Request suite. It allows easy
@@ -34,21 +37,37 @@ DESCRIPTION
     it then generates the request objects to process the form
     application.
 
-    If you use HTML::TreeBuilder like me, please be aware of the
-    fact that the extract_links call in the above example returns an
-    array with alternating URL and FORM-elements, so the first FORM
-    is actually at index 1 and the second FORM is at index 3!
-
 CLASS METHODS
     new($form [, $base [, $debug]])
-        The new-method constructs a new form processor. It get's an
-        HTML::Element object that contains a form as the single
-        parameter. If an base-url is given as an additional
-        parameter, this is used to make the form-url absolute in
-        regard to the given URL.
+        The `new-method' constructs a new form processor. It get's
+        an HTML::Element object that contains a FORM element or
+        ISINDEX element as the single parameter. If an base-url is
+        given as an additional parameter, this is used to make the
+        form-url absolute in regard to the given URL.
 
         If debugging is true, the following functions will be a bit
         "talky" on stdio.
+
+    new_many($tree_part [, $base [, $debug]])
+        The `new_many' method returns a list of newly constructed
+        form processors. It's just like the `new' method except that
+        it can apply to any part of an HTML::Element tree, including
+        the root; it constructs a new form processor for each FORM
+        element at or under `$tree_part'.
+
+        Note that the return list might have zero, one or many new
+        objects in it, depending on how many FORM (or ISINDEX)
+        elements were found.
+
+        Form elements (like INPUT, etc.) found outside of FORM
+        elements are counted as being part of the preceding FORM
+        element. (And if there is no preceding FORM element, they
+        are ignored.) This feature is useful with the odd parse
+        trees that can result from basd HTML in or around FORM
+        elements. If you need to override that feature, then instead
+        call:
+
+          map HTTP::Request::Form->new($_), $tree->find_by_tag_name('FORM');
 
 INSTANCE METHODS
     base()
@@ -66,6 +85,18 @@ INSTANCE METHODS
         so you can safely delete the form structure as soon as you
         created the form processor.
 
+    isindex()
+        This returns true if this came from an original form
+        structure that was actually an ISINDEX element. In that
+        case, the form will hagve only one field, an input/text
+        field named "keywords".
+
+    name()
+        This returns the name attribute of the original form
+        structure. This value is cached within the form processor,
+        so you can safely delete the form structure after you
+        created the form processor.
+
     fields()
         This method delivers a list of fieldnames that are of "open"
         type. This excludes the "hidden" and "submit" elements,
@@ -79,7 +110,7 @@ INSTANCE METHODS
 
     field($name [, $value])
         This method retrieves or sets a field-value. The field is
-        identified by it's name. You have to be sure that you only
+        identified by its name. You have to be sure that you only
         put a allowed value into the field.
 
     field_type($name)
@@ -112,8 +143,8 @@ INSTANCE METHODS
         the same way as the buttons method.
 
     checkbox_check($name)
-    =item checkbox_uncheck($name)
-    =item checkbox_toggle($name)
+    checkbox_uncheck($name)
+    checkbox_toggle($name)
         These methods set, unset or toggle the checkbox checked
         state. Checkbox values are only added to the result if they
         are checked.
@@ -144,7 +175,7 @@ INSTANCE METHODS
 
     referer([$value])
         This returns or sets the referer header for an request. This
-        is usefull if a CGI needs a set referer for authentication.
+        is useful if a CGI needs a set referer for authentication.
 
     press([$name [, $coord ] [, $number]])
         This method creates a HTTP::Request object (via
@@ -174,6 +205,8 @@ INSTALLATION
       perl Makefile.PL
       make install
 
+    or see the perlmodinstall manpage
+
 REQUIRES
       Perl version 5.004 or later
 
@@ -182,7 +215,7 @@ REQUIRES
       LWP::UserAgent
 
 VERSION
-    HTTP::Request::Form version 0.6, March 2nd, 2000
+    HTTP::Request::Form version 0.9, February 8th, 2001
 
 RESTRICTIONS
     Only a subset of all possible form elements are currently
@@ -200,11 +233,16 @@ RESTRICTIONS
       OPTION
       SELECT
       TEXTAREA
+      ISINDEX
 
 BUGS
     There is currently no support for multiple selections (you can
     do them yourself by setting a selection to a comma-delimited
     list of values).
+
+    Multiple fields are not properly handled, only the last value is
+    available. Exception are buttons, they are handled in the right
+    way.
 
     If there are several fields with the same name, you can only set
     the value of the first of this fields (this is especially
@@ -223,8 +261,12 @@ BUGS
     support of the usual button types.
 
 COPYRIGHT
-    Copyright 1998, 1999, Georg Bauer <Georg_Bauer@muensterland.org>
+    Copyright 1998, 1999, 2000 Georg Bauer
+    <Georg_Bauer@muensterland.org>
 
     This library is free software; you can redistribute it and/or
     modify it under the same terms as Perl itself.
+
+MAJOR CONTRIBUTORS
+    Sean M. Burke (ISINDEX, new_many)
 

@@ -3,4 +3,6 @@ Form.pm
 MANIFEST
 Makefile.PL
 README
+test.pl
 ex/altavista.pl
+ex/yahoo.pl

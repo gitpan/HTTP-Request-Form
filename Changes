@@ -50,3 +50,29 @@ Revision history for Perl extension HTTP::Request::Form.
 	- added better support for checkboxes. See the is_checkbox and
 	  the checkbox_* functions
 	- added support for (x,y)-coordinates when pressing image buttons
+
+0.8  Mon Dec 18 09:57:00 CET 2000
+	Some bugfixes and some extensions:
+	- textarea should now work in both forms. Before there was either
+	  a problem with textareas that included some default text, or
+	  with empty textareas. Now Form.pm does look wether the contents
+	  of a textarea is able to perform as_HTML and only uses it if
+	  it is able to do it. Should fix some longstanding problems with
+	  textareas.
+	- ex/yahoo.pl wasn't in the MANIFEST
+	- added a simple test procedure that just checks if it can be loaded
+
+0.9  Thu Feb 9 19:43:00 CET 2001
+	Some bugfixes and some extensions by Sean M. Burke:
+	- ISINDEX is supported
+	- a new constructor new_many is created that parses all forms of
+	  a HTML file so you don't have to manually extract links any more.
+	  This constructor handles stray form elements outside of forms.
+	- the name of form elements is cached and can be queried
+
+0.95  Fri Feb 10 08:01:00 CET 2001
+	Some bugfixes from Sean M. Burke:
+	- textarea was still broken in new_many, now fixed.
+	- iteration over self->content || [], not self->content alone
+	  (that one could be undef)
+

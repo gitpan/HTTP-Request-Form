@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use URI::URL;
 use HTTP::Request::Common;
 
-$VERSION = "0.7";
+$VERSION = "0.95";
 
 sub new {
    my ($class, $form, $base, $debug) = @_;
@@ -20,7 +20,17 @@ sub new {
    my %selections;
    my $upload = 0;
 
-   $form->traverse(
+   my $self = {};
+
+   ($form->tag eq 'isindex')
+   ? do {
+       $self->{'isindex'} = 1;
+       push @allfields, 'keywords'; # fake name. Same as CGI.pm uses.
+       push @fields, 'keywords';
+       $fieldvals{'keywords'} = ''; # fake value
+       $fieldtypes{'keywords'} = 'input/text'; # fake type
+     }
+   : $form->traverse(
       sub {
       my ($self, $start, $depth) = @_;
       if (ref $self) {
@@ -91,14 +101,14 @@ sub new {
 	    push @fields, $name;
 	    $fieldvals{$name} = "";
 	    foreach my $o (@{$self->content}) {
-	       $fieldvals{$name} .= $o->as_HTML;
+	       $fieldvals{$name} .= ref($o) ? $o->as_HTML : $o;
 	    }
-	    $fieldtypes{$name} = "$tag";
+	    $fieldtypes{$name} = $tag;
          } elsif (($tag eq 'select') && $start) {
             my $name = $self->attr('name');
             push @allfields, $name;
             push @fields, $name;
-            foreach my $o (@{$self->content}) {
+            foreach my $o (@{$self->content || []}) {
                if (ref $o) {
                   my $tag = $o->tag;
                   if ($tag eq 'option') {
@@ -113,20 +123,20 @@ sub new {
                   }
                }
             }
-	    $fieldtypes{$name} = "$tag";
+	    $fieldtypes{$name} = $tag;
          }
       }
       1;
       }, 0
    );
 
-   my $self = {};
    $self->{'debug'} = $debug;
    if (defined($form->attr('method'))) {
       $self->{'method'} = $form->attr('method');
    } else {
       $self->{'method'} = 'GET';
    }
+   $self->{'name'} = $form->attr('name');
    $self->{'link'} = $form->attr('action');
    $self->{'base'} = $base;
    $self->{'allfields'} = \@allfields;
@@ -142,9 +152,210 @@ sub new {
    bless $self, $class;
 }
 
+sub new_many {
+   my ($class, $tree, $base, $debug) = @_;
+
+   my (@to_return, @form_stack);
+
+   # start off with throwaway pointers
+   my $F = {};
+   my $allfields = [];
+   my $fields = [];
+   my $fieldvals = {};
+   my $fieldtypes = {};
+   my $buttons = [];
+   my $buttonvals = {};
+   my $buttontypes = {};
+   my $selections = {};
+   my $checkboxstate = {};
+
+   $tree->traverse(
+      sub { # pre-order callback:
+         my ($self, $start, $depth) = @_;
+         if (ref $self) {
+            my $tag = $self->tag;
+            if ($tag eq 'form' or $tag eq 'isindex') {
+               if($start) {
+                 my $new = {};
+                 $new->{'debug'} = $debug;
+                 if (defined($self->attr('method'))) {
+                    $new->{'method'} = $self->attr('method');
+                 } else {
+                    $new->{'method'} = 'GET';
+                 }
+                 $new->{'link'} = $self->attr('action');
+                 $new->{'name'} = $self->attr('name');
+                 $new->{'base'} = $base;
+                 $new->{'allfields'}     = $allfields     = [];
+                 $new->{'fields'}        = $fields        = [];
+                 $new->{'fieldvals'}     = $fieldvals     = {};
+                 $new->{'fieldtypes'}    = $fieldtypes    = {};
+                 $new->{'buttons'}       = $buttons       = [];
+                 $new->{'buttonvals'}    = $buttonvals    = {};
+                 $new->{'buttontypes'}   = $buttontypes   = {};
+                 $new->{'selections'}    = $selections    = {};
+                 $new->{'checkboxstate'} = $checkboxstate = {};
+                 $new->{'upload'} = 0;
+                 bless $new, $class;
+   
+                 $F = $new;
+                 push @to_return, $new;
+                 push @form_stack, $new;
+   
+                 if($tag eq 'isindex') {
+                   $new->{'isindex'} = 1;
+                   push @$allfields, 'keywords'; # fake name. Same as CGI.pm uses.
+                   push @$fields,    'keywords'; # fake name
+                   $$fieldvals{'keywords'}  = '';   # fake value
+                   $$fieldtypes{'keywords'} = "input/text"; # fake type
+                   $start = 0; # so we'll pop it in the next block.
+                               # (since ISINDEX is an empty element, we'd never
+                               #  visit it in post-order for real)
+   
+                   #  In theory, this could mean that subsequent stranded form
+                   #  elements would end up being put into this fake-o
+                   #  Form object we made from the ISINDEX.  But hey, ISINDEX
+                   #  is rare (and deprecated) these days, and is very unlikely
+                   #  to co-occur with stranded form elements.  Moreover, the
+                   #  added form elements would be basically ignored, unless
+                   #  they actually had the field name "keywords".
+                 }
+               }
+   
+               unless($start) {
+                 # We're leaving a FORM or ISINDEX element.
+                 pop @form_stack;
+                 $F = $form_stack[-1] if @form_stack;
+                 # otherwise, the old one lingers.
+   
+                 # reset pointers:
+                 $allfields     = $F->{'allfields'};
+                 $fields        = $F->{'fields'};
+                 $fieldvals     = $F->{'fieldvals'};
+                 $fieldtypes    = $F->{'fieldtypes'};
+                 $buttons       = $F->{'buttons'};
+                 $buttonvals    = $F->{'buttonvals'};
+                 $buttontypes   = $F->{'buttontypes'};
+                 $selections    = $F->{'selections'};
+                 $checkboxstate = $F->{'checkboxstate'};
+               }
+   
+            } elsif (($tag eq 'input') ||
+                (($tag eq 'button') && $start)) {
+               my $type = lc($self->attr('type'));
+               $type = "text" if (!defined($type));
+               if ($type eq 'hidden') {
+                  my $name = $self->attr('name');
+                  my $value = $self->attr('value');
+                  push @$allfields, $name;
+                  $$fieldvals{$name} = $value;
+                  $$fieldtypes{$name} = "$tag/$type";
+               } elsif (($type eq 'submit') ||
+                         ($type eq 'reset') ||
+                         ($type eq 'image')) {
+                  my $name = $self->attr('name') || $type;
+                  my $value = $self->attr('value') || $type;
+                  if (defined($name)) {
+                     if (!defined($$buttonvals{$name})) {
+                         push @$buttons, $name;
+                         $$buttonvals{$name} = [$value];
+                         $$buttontypes{$name} = [$type];
+                     } else {
+                         push @{$$buttonvals{$name}}, $value;
+                         push @{$$buttontypes{$name}}, $type;
+                     }
+                  }
+               } else {
+                  my $name = $self->attr('name');
+                  my $value = $self->attr('value');
+                  if ($type eq 'radio') {
+                     if (!defined($$fieldtypes{$name})) {
+                        push @$allfields, $name;
+                        push @$fields, $name;
+                        $$fieldtypes{$name} = "$tag/$type";
+                     }
+                     if (!defined($$selections{$name})) {
+                        $$selections{$name} = [$value];
+                     } else {
+                        push @{$$selections{$name}}, $value;
+                     }
+                     $$fieldvals{$name} = $value if ($self->attr('checked'));
+                  } elsif ($type eq 'checkbox') {
+                     push @$allfields, $name;
+                     push @$fields, $name;
+                     $$fieldvals{$name} = $value;
+                     $$fieldtypes{$name} = "$tag/$type";
+                     if ($self->attr('checked')) {
+                        $$checkboxstate{$name} = 1;
+                     } else {
+                        $$checkboxstate{$name} = 0;
+                     }
+                  } else {
+                     push @$allfields, $name;
+                     push @$fields, $name;
+                     $$fieldvals{$name} = $value;
+                     $$fieldtypes{$name} = "$tag/$type";
+                  }
+                  if ($type eq 'file') {
+                     $F->{'upload'} = 1;
+                  }
+               }
+            } elsif (($tag eq 'textarea') && $start) {
+               my $name = $self->attr('name');
+               push @$allfields, $name;
+               push @$fields, $name;
+               $$fieldvals{$name} = "";
+               foreach my $o (@{$self->content}) {
+                  if ($o->can('as_HTML')) {
+                     $fieldvals{$name} .= $o->as_HTML;
+                  } else {
+                     $fieldvals{$name} .= $o;
+                  }
+               }
+               $$fieldtypes{$name} = $tag;
+            } elsif (($tag eq 'select') && $start) {
+               my $name = $self->attr('name');
+               push @$allfields, $name;
+               push @$fields, $name;
+               foreach my $o (@{$self->content}) {
+                  if (ref $o) {
+                     my $tag = $o->tag;
+                     if ($tag eq 'option') {
+                        if ($o->attr('selected')) {
+                           $$fieldvals{$name} = $o->attr('value');
+                        }
+                        if (!defined($$selections{$name})) {
+                           $$selections{$name} = [$o->attr('value')];
+                        } else {
+                           push @{$$selections{$name}}, $o->attr('value');
+                        }
+                     }
+                  }
+               }
+               $$fieldtypes{$name} = $tag;
+            }
+         }
+         1;
+     }, 0
+   );
+   
+   return @to_return;
+
+}
+
 sub fields {
    my $self = shift;
    return @{$self->{'fields'}};
+}
+
+sub name {
+   my $self = shift;
+   return $self->{'name'};
+}
+
+sub isindex {
+   my $self = shift;
+   return $self->{'isindex'};
 }
 
 sub allfields {
@@ -328,7 +539,10 @@ sub press {
    if ($self->{'debug'}) {
       print $self->method, " $url ", join(' - ', @array), "\n";
    }
-   if (uc($self->method) eq "POST") {
+   if ($self->{'isindex'}) {
+      $url->query_keywords( $self->{'fieldvals'}->{'keywords'} );
+      return GET $url;
+   } elsif (uc($self->method) eq "POST") {
       my $referer = $self->referer;
       if ($self->{'upload'}) {
          if (defined($referer)) {
@@ -391,23 +605,26 @@ HTTP::Request::Form - Construct HTTP::Request objects for form processing
 
 use the following as a tool to query Altavista for "perl" from the commandline:
 
-  use HTML::TreeBuilder;
   use URI::URL;
   use LWP::UserAgent;
   use HTTP::Request;
   use HTTP::Request::Common;
   use HTTP::Request::Form;
+  use HTML::TreeBuilder 3.0;
 
   my $ua = LWP::UserAgent->new;
   my $url = url 'http://www.altavista.digital.com/';
   my $res = $ua->request(GET $url);
-  my $tb = HTML::TreeBuilder->new;
-  $tb->parse($res->content);
-  my @forms = @{$tb->extract_links(qw(FORM))};
-  my $f = HTTP::Request::Form->new($forms[0][1], $url);
+  my $tree = HTML::TreeBuilder->new;
+  $tree->parse($res->content);
+  $tree->eof();
+
+  my @forms = $tree->find_by_tag_name('FORM');
+  die "What, no forms in $url?" unless @forms;
+  my $f = HTTP::Request::Form->new($forms[0], $url);
   $f->field("q", "perl");
   my $response = $ua->request($f->press("search"));
-  print $response->content if ($response->is_success);
+  print $response->content if $response->is_success;
 
 =head1 DESCRIPTION
 
@@ -418,23 +635,36 @@ trees of documents (especially the forms parts extracted with extract_links)
 and generates it's own internal representation of forms from which it then
 generates the request objects to process the form application.
 
-If you use HTML::TreeBuilder like me, please be aware of the fact that the
-extract_links call in the above example returns an array with alternating
-URL and FORM-elements, so the first FORM is actually at index 1 and the
-second FORM is at index 3!
-
 =head1 CLASS METHODS
 
 =over 4
 
 =item new($form [, $base [, $debug]])
 
-The new-method constructs a new form processor. It get's an HTML::Element
-object that contains a form as the single parameter. If an base-url is given
-as an additional parameter, this is used to make the form-url absolute in
-regard to the given URL.
+The C<new-method> constructs a new form processor. It get's an HTML::Element
+object that contains a FORM element or ISINDEX element as the single parameter.
+If an base-url is given as an additional parameter, this is used to make the
+form-url absolute in regard to the given URL.
 
 If debugging is true, the following functions will be a bit "talky" on stdio.
+
+=item new_many($tree_part [, $base [, $debug]])
+
+The C<new_many> method returns a list of newly constructed form processors.
+It's just like the C<new> method except that it can apply to any part of an
+HTML::Element tree, including the root; it constructs a new form processor
+for each FORM element at or under C<$tree_part>.
+
+Note that the return list might have zero, one or many new objects in it,
+depending on how many FORM (or ISINDEX) elements were found.
+
+Form elements (like INPUT, etc.) found outside of FORM elements are counted
+as being part of the preceding FORM element. (And if there is no preceding
+FORM element, they are ignored.) This feature is useful with the odd parse
+trees that can result from basd HTML in or around FORM elements. If you need
+to override that feature, then instead call:
+
+  map HTTP::Request::Form->new($_), $tree->find_by_tag_name('FORM');
 
 =back
 
@@ -458,6 +688,18 @@ This returns the method attribute of the original form structure. This value
 is cached within the form processor, so you can safely delete the form
 structure as soon as you created the form processor.
 
+=item isindex()
+
+This returns true if this came from an original form structure that was
+actually an ISINDEX element. In that case, the form will hagve only
+one field, an input/text field named "keywords".
+
+=item name()
+
+This returns the name attribute of the original form structure. This value
+is cached within the form processor, so you can safely delete the form
+structure after you created the form processor.
+
 =item fields()
 
 This method delivers a list of fieldnames that are of "open" type. This
@@ -473,7 +715,7 @@ form-source excluding the submit fields.
 =item field($name [, $value])
 
 This method retrieves or sets a field-value. The field is identified by
-it's name. You have to be sure that you only put a allowed value into the
+its name. You have to be sure that you only put a allowed value into the
 field.
 
 =item field_type($name)
@@ -508,7 +750,9 @@ This method delivers a list of all checkbox fields much in the same way as
 the buttons method.
 
 =item checkbox_check($name)
+
 =item checkbox_uncheck($name)
+
 =item checkbox_toggle($name)
 
 These methods set, unset or toggle the checkbox checked state. Checkbox
@@ -541,7 +785,7 @@ This gives true if the named button exists, false (undef) otherwise.
 
 =item referer([$value])
 
-This returns or sets the referer header for an request. This is usefull if
+This returns or sets the referer header for an request. This is useful if
 a CGI needs a set referer for authentication.
 
 =item press([$name [, $coord ] [, $number]])
@@ -573,6 +817,8 @@ L<HTML::Element>, L<URI::URL>
   perl Makefile.PL
   make install
 
+or see L<perlmodinstall>
+
 =head1 REQUIRES
 
   Perl version 5.004 or later
@@ -583,7 +829,7 @@ L<HTML::Element>, L<URI::URL>
 
 =head1 VERSION
 
-HTTP::Request::Form version 0.6, March 2nd, 2000
+HTTP::Request::Form version 0.9, February 8th, 2001
 
 =head1 RESTRICTIONS
 
@@ -601,12 +847,16 @@ of supported tags as of this version includes:
   OPTION
   SELECT
   TEXTAREA
+  ISINDEX
 
 =head1 BUGS
 
 There is currently no support for multiple selections (you can do
 them yourself by setting a selection to a comma-delimited list of
 values).
+
+Multiple fields are not properly handled, only the last value is
+available. Exception are buttons, they are handled in the right way.
 
 If there are several fields with the same name, you can only set
 the value of the first of this fields (this is especially problematic
@@ -624,10 +874,14 @@ the usual button types.
 
 =head1 COPYRIGHT
 
-Copyright 1998, 1999, Georg Bauer <Georg_Bauer@muensterland.org>
+Copyright 1998, 1999, 2000 Georg Bauer E<lt>Georg_Bauer@muensterland.orgE<gt>
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
+
+=head1 MAJOR CONTRIBUTORS
+
+Sean M. Burke (ISINDEX, new_many)
 
 =cut
 
