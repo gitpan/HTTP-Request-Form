@@ -1,0 +1,15 @@
+Revision history for Perl extension HTTP::Request::Form.
+
+0.1  Fri Feb 13 11:49:30 1998
+	- original version; created by h2xs 1.18
+
+0.2  Wed Jul 15 10:46:00 1998
+	- line-endings were in DOS-format. That's the result if you think
+	  "oh, just hack this up on the dos prompt". Dang. Sorry.
+	- corrected and tested the installation
+	- streamlined the documentation
+
+0.3  Mon Aug 31 09:51:00 1998
+	- methods can be uppercase or lowercase (this was a problem with the
+	  new LWP)
+	- archivename now in standard format

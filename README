@@ -1,0 +1,151 @@
+NAME
+    HTTP::Request::Form - Construct HTTP::Request objects for form
+    processing
+
+SYNOPSIS
+      use HTTP::Request::Form;
+      use HTML::TreeBuilder;
+      use URI::URL;
+
+      $ua = LWP::UserAgent->new;
+      $url = url 'http://www.sn.no/';
+      $res = $ua->request(GET $url);
+      $p = HTML::TreeBuilder->new;
+      foreach $i (@{$p->extract_links(qw(form))}) {
+         $f = HTTP::Request::Form->new($i, $url);
+         $f->field("user", "hugo");
+         $f->field("password", "duddi");
+         $ua->request($f->press("Send"));
+      }
+      $p->delete();
+
+DESCRIPTION
+    This is an extension of the HTTP::Request suite. It allows easy
+    processing of forms in a user agent by filling out fields,
+    querying fields, selections and buttons and pressing buttons. It
+    uses HTML::TreeBuilder generated parse triees of documents
+    (especially the forms parts extracted with extract_links) and
+    generates it's own internal representation of forms from which
+    it then generates the request objects to process the form
+    application.
+
+CLASS METHODS
+    new($form [, $base [, $debug]])
+        The new-method constructs a new form processor. It get's an
+        HTML::Element object that contains a form as the single
+        parameter. If an base-url is given as an additional
+        parameter, this is used to make the form-url absolute in
+        regard to the given URL.
+
+        If debugging is true, the following functions will be a bit
+        "talky" on stdio.
+
+INSTANCE METHODS
+    base()
+        This returns the parameter $base to the "new" constructor.
+
+    link()
+        This returns the action attribute of the original form
+        structure. This value is cached within the form processor,
+        so you can safely delete the form structure after you
+        created the form processor.
+
+    method()
+        This returns the method attribute of the original form
+        structure. This value is cached within the form processor,
+        so you can safely delete the form structure as soon as you
+        created the form processor.
+
+    fields()
+        This method delivers a list of fieldnames that are of "open"
+        type. This excludes the "hidden" and "submit" elements,
+        because they are already filled with a value (and as such
+        declared as "closed") or as in the case of "submit" are
+        buttons, of which only one must be used.
+
+    allfields()
+        This delivers a list of all fieldnames in the order as they
+        occured in the form-source excluding the submit fields.
+
+    field($name [, $value])
+        This method retrieves or sets a field-value. The field is
+        identified by it's name. You have to be sure that you only
+        put a allowed value into the field.
+
+    is_selection($name)
+        This tests if a field is a selection or an input.
+
+    field_selection($name)
+        This delivers the array of the options of a selection. The
+        element that is marked with selected in the source is given
+        as the default value.
+
+    buttons()
+        This delivers a list of all defined and named buttons of a
+        form.
+
+    button($button [, $value])
+        This gets or sets the value of a button. Normally only
+        getting a button value is needed. The value of a button is a
+        reference to an array of values (because a button can exist
+        multiple times).
+
+    button_exists($button)
+        This gives true if the named button exists, false (undef)
+        otherwise.
+
+    press([$name [, $number]])
+        This method creates a HTTP::Request object (via
+        HTTP::Request::Common) that sends the formdata to the server
+        with the requested method. If you give a button-name, that
+        button is used. If you give no button name, it assumes a
+        button without a name and just leaves out this last
+        parameter. If the number of the button is given, that button
+        value is delivered. If the number is not given, 0 (the first
+        button of this name) is assumed.
+
+    dump()
+        This method dumps the form-data on stdio for debugging
+        purpose.
+
+SEE ALSO
+    the HTTP::Request manpage, the HTTP::Request::Common manpage,
+    the LWP::UserAgent manpage, the HTML::Element manpage, the
+    URI::URL manpage
+
+INSTALLATION
+      perl Makefile.PL
+      make install
+
+REQUIRES
+      Perl version 5.004 or later
+
+      HTTP::Request::Common
+      HTML::TreeBuilder
+      LWP::UserAgent
+
+VERSION
+    HTTP::Request::Form version 0.2, July 15th, 1998
+
+BUGS
+    Only a subset of all possible form elements are currently
+    supported. The list of supported tags as of this version
+    includes:
+
+      INPUT
+      INPUT/HIDDEN
+      INPUT/SUBMIT
+      SELECT
+      OPTION
+
+    There currently is no special code to help with radio buttons or
+    checkboxes. Although these can easily be used with the standard
+    INPUT handler, it would be better to give a simpler interface to
+    them.
+
+COPYRIGHT
+    Copyright 1998, Georg Bauer <Georg_Bauer@muensterland.org>
+
+    This library is free software; you can redistribute it and/or
+    modify it under the same terms as Perl itself.
+
